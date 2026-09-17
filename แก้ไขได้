@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>สมาชิกสะสมแต้ม</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; min-height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Sarabun", sans-serif;
+    background: linear-gradient(180deg, #0284C7 0%, #0284C7 200px, #F0F9FF 200px);
+  }
+  .header { text-align: center; padding: 32px 20px 16px; color: #fff; }
+  .header h2 { margin: 0; font-size: 22px; font-weight: 700; }
+  .header p { margin: 6px 0 0; font-size: 13px; opacity: 0.9; }
+
+  .tabs {
+    display: flex; margin: 0 16px; background: rgba(255,255,255,0.25);
+    border-radius: 12px; padding: 4px; position: relative; top: -8px;
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 600;
+    color: #fff; border-radius: 9px; cursor: pointer; user-select: none;
+  }
+  .tab.active { background: #fff; color: #0284C7; }
+
+  .card {
+    background: #fff; margin: 0 16px 16px; border-radius: 18px; padding: 24px 20px;
+    box-shadow: 0 8px 24px rgba(2,132,199,0.12); position: relative; top: -4px;
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-top: 16px; }
+  label:first-child { margin-top: 0; }
+  input {
+    width: 100%; padding: 13px 14px; margin-top: 6px; font-size: 16px;
+    border: 1.5px solid #e2e8f0; border-radius: 12px; background: #f8fafc;
+    outline: none; transition: border-color .15s;
+  }
+  input:focus { border-color: #0284C7; background: #fff; }
+  button.primary {
+    width: 100%; margin-top: 22px; padding: 15px; background: #0284C7; color: #fff;
+    border: none; border-radius: 12px; font-size: 16px; font-weight: 700;
+    box-shadow: 0 4px 12px rgba(2,132,199,0.35); cursor: pointer;
+  }
+  button.primary:active { transform: scale(0.98); }
+  button.primary:disabled { background: #bcdcf0; box-shadow: none; }
+
+  button.ghost {
+    width: 100%; margin-top: 10px; background: #fff; color: #0284C7;
+    border: 1.5px solid #0284C7; box-shadow: none; font-size: 14px; padding: 10px;
+    border-radius: 12px; cursor: pointer;
+  }
+
+  #signupStatus, #checkStatus { text-align: center; margin-top: 14px; font-size: 13px; color: #888; min-height: 18px; }
+  #signupStatus.error, #checkStatus.error { color: #e0483e; font-weight: 600; }
+
+  .info-box {
+    background: #EFF8FF; border-radius: 14px; padding: 18px; text-align: center;
+  }
+  .info-box.expired { background: #FDECEA; }
+  .info-box.expired .title { color: #E0483E; }
+  .info-box .icon { font-size: 36px; margin-bottom: 6px; }
+  .info-box .title { font-size: 16px; font-weight: 700; color: #0284C7; margin-bottom: 4px; }
+  .info-box .sub { font-size: 13px; color: #667085; }
+
+  .result {
+    margin-top: 20px; padding: 16px; border-radius: 12px; background: #EFF8FF; display: none;
+  }
+  .result.error { background: #FDECEA; }
+  .points { font-size: 32px; font-weight: bold; color: #0284C7; text-align: center; margin: 8px 0; }
+  .field-label { color: #667085; font-size: 13px; }
+
+  .loading { text-align: center; color: #888; display: none; margin-top: 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h2>💧 สมาชิกสะสมแต้ม</h2>
+  <p>สมัครสมาชิกหรือเช็คแต้มของคุณได้ที่นี่</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tabSignup" onclick="switchTab('signup')">สมัครสมาชิก</div>
+  <div class="tab" id="tabCheck" onclick="switchTab('check')">เช็คแต้มของฉัน</div>
+</div>
+
+<!-- ================= PANEL: สมัครสมาชิก ================= -->
+<div class="card panel active" id="panelSignup">
+
+  <div id="signupLoadingBox" class="info-box">
+    <div class="icon">⏳</div>
+    <div class="title">กำลังตรวจสอบสถานะสมาชิก...</div>
+    <div class="sub" id="signupDebug"></div>
+  </div>
+
+  <div id="alreadyMemberBox" class="info-box" style="display:none;">
+    <div class="icon">✅</div>
+    <div class="title">คุณเป็นสมาชิกอยู่แล้ว</div>
+    <div class="sub" id="alreadyMemberDetail"></div>
+    <button class="ghost" onclick="switchTab('check')">ไปเช็คแต้มของฉัน</button>
+  </div>
+
+  <!-- แสดงเมื่อกิจกรรมปิดรับสมัคร/หมดเขต -->
+  <div id="expiredBox" class="info-box expired" style="display:none;">
+    <div class="icon">⛔</div>
+    <div class="title" id="expiredTitle">กิจกรรมไม่อยู่ในช่วงเวลา</div>
+    <div class="sub" id="expiredDetail"></div>
+  </div>
+
+  <!-- ฟอร์มสร้างช่องกรอกแบบ Dynamic -->
+  <form id="memberForm" style="display:none;">
+    <div id="dynamicFields"></div>
+
+    <button type="submit" class="primary" id="submitBtn">เข้าร่วมกิจกรรม</button>
+    <div id="signupStatus"></div>
+  </form>
+
+  <button class="ghost" id="retryConnectBtn" style="display:none;" onclick="startSignupFlow()">ลองเชื่อมต่อ LINE ใหม่</button>
+</div>
+
+<!-- ================= PANEL: เช็คแต้ม ================= -->
+<div class="card panel" id="panelCheck">
+  <label>เบอร์โทรศัพท์ที่ใช้สมัคร</label>
+  <input type="tel" id="phoneInput" placeholder="กรอกเบอร์โทรศัพท์ เช่น 0812345678" maxlength="10">
+  <button class="primary" id="checkBtn" onclick="checkPoint()">เช็คแต้มของฉัน</button>
+  <div class="loading" id="checkLoading">กำลังตรวจสอบ...</div>
+  <div class="result" id="resultBox"></div>
+</div>
+
+<script>
+  var LIFF_ID = '2011459842-pmQu2E74';
+  var API_URL = 'https://script.google.com/macros/s/AKfycbxxtvD1cVdyJGMQAJcmdqvo1Ton-fQ4i2nDj061Fq7fbR9MQsQKh5TknFHCI5Up8TIXFA/exec';
+
+  var currentUserId = null;
+  var systemConfig = null;
+
+  // ---------- Tab switching ----------
+  function switchTab(name) {
+    document.getElementById('tabSignup').classList.toggle('active', name === 'signup');
+    document.getElementById('tabCheck').classList.toggle('active', name === 'check');
+    document.getElementById('panelSignup').classList.toggle('active', name === 'signup');
+    document.getElementById('panelCheck').classList.toggle('active', name === 'check');
+  }
+
+  // ---------- JSONP helper ----------
+  function jsonp(url, onSuccess, onError) {
+    var callbackName = 'jsonpCallback_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+    var script = document.createElement('script');
+    var timeoutId;
+
+    function cleanup() {
+      clearTimeout(timeoutId);
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[callbackName] = function (data) {
+      cleanup();
+      onSuccess(data);
+    };
+
+    script.onerror = function () {
+      cleanup();
+      onError();
+    };
+
+    timeoutId = setTimeout(function () {
+      cleanup();
+      onError();
+    }, 15000);
+
+    script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'callback=' + callbackName;
+    document.body.appendChild(script);
+  }
+
+  // ---------- สร้าง Input Field อัตโนมัติจากตั้งค่าใน Google Sheet ----------
+  function renderDynamicForm(fields) {
+    var container = document.getElementById('dynamicFields');
+    container.innerHTML = '';
+
+    fields.forEach(function (field) {
+      var label = document.createElement('label');
+      label.textContent = field.label + (field.required ? ' *' : '');
+
+      var input = document.createElement('input');
+      input.name = field.key;
+      input.dataset.key = field.key;
+      if (field.required) input.required = true;
+
+      // กำหนด Type ของ Input ตามประเภทที่ระบุในชีต
+      switch (field.type) {
+        case 'เบอร์โทรศัพท์':
+          input.type = 'tel';
+          input.placeholder = '08xxxxxxxx';
+          break;
+        case 'อีเมล':
+          input.type = 'email';
+          input.placeholder = 'example@email.com';
+          break;
+        case 'วันที่':
+          input.type = 'date';
+          break;
+        case 'ตัวเลข':
+          input.type = 'number';
+          break;
+        default:
+          input.type = 'text';
+          input.placeholder = 'กรอก' + field.label;
+      }
+
+      container.appendChild(label);
+      container.appendChild(input);
+    });
+  }
+
+  // ---------- สมัครสมาชิก ----------
+  function startSignupFlow() {
+    document.getElementById('retryConnectBtn').style.display = 'none';
+    document.getElementById('alreadyMemberBox').style.display = 'none';
+    document.getElementById('expiredBox').style.display = 'none';
+    document.getElementById('memberForm').style.display = 'none';
+    document.getElementById('signupLoadingBox').style.display = 'block';
+    document.getElementById('signupDebug').textContent = 'กำลังดึงการตั้งค่าระบบ...';
+
+    // 1. ดึงข้อมูลตั้งค่าระบบก่อน
+    jsonp(API_URL + '?action=getConfig', function (config) {
+      systemConfig = config;
+
+      // ตรวจสอบสถานะวันเริ่ม-วันสิ้นสุดกิจกรรม
+      if (config.isExpired) {
+        document.getElementById('signupLoadingBox').style.display = 'none';
+        document.getElementById('expiredBox').style.display = 'block';
+        document.getElementById('expiredDetail').textContent = config.expiredMessage;
+        return;
+      }
+
+      // สร้างช่องกรอกข้อมูลตามตั้งค่า
+      renderDynamicForm(config.fields);
+
+      // 2. เริ่มเชื่อมต่อ LINE LIFF
+      document.getElementById('signupDebug').textContent = 'กำลังเชื่อมต่อ LINE...';
+      var connectTimer = setTimeout(function () {
+        document.getElementById('signupDebug').textContent = 'เชื่อมต่อ LINE ช้ากว่าปกติ กรุณาลองใหม่';
+        document.getElementById('retryConnectBtn').style.display = 'block';
+      }, 8000);
+
+      liff.init({ liffId: LIFF_ID }).then(function () {
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return null;
+        }
+        return liff.getProfile();
+      }).then(function (profile) {
+        if (!profile) return;
+        clearTimeout(connectTimer);
+        currentUserId = profile.userId;
+        checkIfAlreadyMember(currentUserId);
+      }).catch(function (err) {
+        clearTimeout(connectTimer);
+        document.getElementById('signupDebug').textContent = 'LIFF ERROR: ' + err.message;
+        document.getElementById('retryConnectBtn').style.display = 'block';
+      });
+
+    }, function () {
+      document.getElementById('signupDebug').textContent = 'ไม่สามารถดึงข้อมูลตั้งค่าระบบได้';
+      document.getElementById('retryConnectBtn').style.display = 'block';
+    });
+  }
+
+  function checkIfAlreadyMember(userId) {
+    var url = API_URL + '?action=checkMember&userId=' + encodeURIComponent(userId);
+    jsonp(url, function (data) {
+      document.getElementById('signupLoadingBox').style.display = 'none';
+      if (data.ok && data.registered) {
+        document.getElementById('alreadyMemberBox').style.display = 'block';
+        var details = [];
+        if (data.data) {
+          if (data.data['ชื่อลูกค้า']) details.push(data.data['ชื่อลูกค้า']);
+          if (data.data['เบอร์โทรศัพท์']) details.push(data.data['เบอร์โทรศัพท์']);
+        }
+        document.getElementById('alreadyMemberDetail').textContent = details.join(' · ');
+      } else {
+        document.getElementById('memberForm').style.display = 'block';
+      }
+    }, function () {
+      document.getElementById('signupLoadingBox').style.display = 'none';
+      document.getElementById('memberForm').style.display = 'block';
+    });
+  }
+
+  // ---------- ส่งฟอร์มสมัครสมาชิกแบบ Dynamic ----------
+  document.getElementById('memberForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    var submitBtn = document.getElementById('submitBtn');
+    var statusEl = document.getElementById('signupStatus');
+
+    if (!currentUserId) {
+      statusEl.textContent = 'กำลังเชื่อมต่อ LINE กรุณารอสักครู่แล้วลองใหม่';
+      statusEl.className = 'error';
+      return;
+    }
+
+    // ดึงข้อมูลจากทุกช่องที่สร้างขึ้นมา
+    var payload = { userId: currentUserId };
+    var inputs = document.querySelectorAll('#dynamicFields input');
+    inputs.forEach(function (input) {
+      payload[input.dataset.key] = input.value.trim();
+    });
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'กำลังบันทึก...';
+    statusEl.textContent = '';
+    statusEl.className = '';
+
+    fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (result) {
+        if (!result.ok) throw new Error(result.error || result.message || 'บันทึกไม่สำเร็จ');
+
+        submitBtn.textContent = 'เข้าร่วมสำเร็จ ✓';
+        statusEl.textContent = result.message || systemConfig.successMessage || 'บันทึกข้อมูลเรียบร้อย';
+
+        setTimeout(function () {
+          if (liff.isInClient()) { liff.closeWindow(); }
+        }, 1500);
+      })
+      .catch(function (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'เข้าร่วมกิจกรรม';
+        statusEl.textContent = 'เกิดข้อผิดพลาด: ' + err.message;
+        statusEl.className = 'error';
+      });
+  });
+
+  // ---------- เช็คแต้ม ----------
+  function checkPoint() {
+    var phone = document.getElementById('phoneInput').value.trim();
+    var resultBox = document.getElementById('resultBox');
+    var loading = document.getElementById('checkLoading');
+    var btn = document.getElementById('checkBtn');
+
+    if (!phone) {
+      alert('กรุณากรอกเบอร์โทรศัพท์');
+      return;
+    }
+
+    resultBox.style.display = 'none';
+    loading.style.display = 'block';
+    btn.disabled = true;
+
+    jsonp(API_URL + '?action=checkPoint&phone=' + encodeURIComponent(phone),
+      function (data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        resultBox.style.display = 'block';
+
+        if (data.success) {
+          resultBox.className = 'result';
+          resultBox.innerHTML =
+            '<div class="field-label">' + (data.custName || '') + '</div>' +
+            '<div class="points">' + Number(data.totalPoints).toLocaleString() + ' แต้ม</div>' +
+            '<div class="field-label">จำนวนครั้งที่สั่งซื้อ: ' + data.orderCount + ' ครั้ง</div>' +
+            '<div class="field-label">ซื้อล่าสุด: ' + (data.lastDate || '-') + '</div>' +
+            (data.message ? '<div class="field-label" style="margin-top:8px;">' + data.message + '</div>' : '');
+        } else if (data.notRegistered) {
+          resultBox.className = 'result error';
+          resultBox.innerHTML =
+            '<div class="field-label" style="font-weight:700;color:#e0483e;">ยังไม่ได้เป็นสมาชิก</div>' +
+            '<div class="field-label" style="margin-top:4px;">' + (data.message || '') + '</div>' +
+            '<button class="primary" style="margin-top:14px;" onclick="switchTab(\'signup\')">สมัครเพื่อสะสมแต้ม</button>';
+        } else {
+          resultBox.className = 'result error';
+          resultBox.innerHTML = '<div class="field-label">' + (data.message || 'เกิดข้อผิดพลาด') + '</div>';
+        }
+      },
+      function () {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        resultBox.style.display = 'block';
+        resultBox.className = 'result error';
+        resultBox.innerHTML = '<div class="field-label">เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง</div>';
+      });
+  }
+
+  // ---------- เริ่มทำงาน ----------
+  startSignupFlow();
+</script>
+
+</body>
+</html>
