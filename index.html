@@ -91,8 +91,8 @@
 <div class="card panel active" id="panelSignup">
 
   <div id="signupLoadingBox" class="info-box">
-    <div class="icon">⏳</div>
-    <div class="title">กำลังตรวจสอบสถานะสมาชิก...</div>
+    <div class="icon" id="signupIcon">⏳</div>
+    <div class="title" id="signupTitle">กำลังตรวจสอบสถานะสมาชิก...</div>
     <div class="sub" id="signupDebug"></div>
   </div>
 
@@ -110,7 +110,7 @@
     <div id="signupStatus"></div>
   </form>
 
-  <button class="ghost" id="retryConnectBtn" style="display:none;" onclick="startSignupFlow()">ลองเชื่อมต่อ LINE ใหม่</button>
+  <button class="ghost" id="retryConnectBtn" style="display:none;" onclick="startSignupFlow()">ลองเชื่อมต่อใหม่</button>
 </div>
 
 <!-- ================= PANEL: เช็คแต้ม ================= -->
@@ -124,9 +124,10 @@
 
 <script>
   var LIFF_ID = '2011459842-pmQu2E74';
-  var API_URL = 'https://script.google.com/macros/s/AKfycbyWpxi8HjOkwWPhON-xquZ3zva-hUK_YLy_QQ3RDUZ7rsNWJXWs0CGit-Gv5dHmV1IMEg/exec';
+  var API_URL = 'https://script.google.com/macros/s/AKfycbxF9_q_EIrLThhXPrwgQ51xRBMSjd4IQWmSGVuO9GG4c58Rfn5UQLjDL5QMRScPH4sUuQ/exec';
 
   var currentUserId = null;
+  var successMessage = 'บันทึกข้อมูลเรียบร้อย';
 
   // ---------- Tab switching ----------
   function switchTab(name) {
@@ -134,6 +135,15 @@
     document.getElementById('tabCheck').classList.toggle('active', name === 'check');
     document.getElementById('panelSignup').classList.toggle('active', name === 'signup');
     document.getElementById('panelCheck').classList.toggle('active', name === 'check');
+  }
+
+  // ---------- แสดงสถานะในกล่องโหลด ----------
+  function showSignupMessage(icon, title, sub, showRetry) {
+    document.getElementById('signupLoadingBox').style.display = 'block';
+    document.getElementById('signupIcon').textContent = icon;
+    document.getElementById('signupTitle').textContent = title;
+    document.getElementById('signupDebug').textContent = sub || '';
+    document.getElementById('retryConnectBtn').style.display = showRetry ? 'block' : 'none';
   }
 
   // ---------- JSONP helper ----------
@@ -169,15 +179,12 @@
 
   // ---------- เริ่มต้นทำงาน ----------
   function startSignupFlow() {
-    document.getElementById('retryConnectBtn').style.display = 'none';
     document.getElementById('alreadyMemberBox').style.display = 'none';
     document.getElementById('memberForm').style.display = 'none';
-    document.getElementById('signupLoadingBox').style.display = 'block';
-    document.getElementById('signupDebug').textContent = 'กำลังเชื่อมต่อ LINE...';
+    showSignupMessage('⏳', 'กำลังตรวจสอบสถานะสมาชิก...', 'กำลังเชื่อมต่อ LINE...', false);
 
     var connectTimer = setTimeout(function () {
-      document.getElementById('signupDebug').textContent = 'เชื่อมต่อ LINE ช้ากว่าปกติ กรุณาลองใหม่';
-      document.getElementById('retryConnectBtn').style.display = 'block';
+      showSignupMessage('⏳', 'กำลังตรวจสอบสถานะสมาชิก...', 'เชื่อมต่อ LINE ช้ากว่าปกติ กรุณาลองใหม่', true);
     }, 8000);
 
     liff.init({ liffId: LIFF_ID }).then(function () {
@@ -194,8 +201,7 @@
       checkIfAlreadyMember(currentUserId);
     }).catch(function (err) {
       clearTimeout(connectTimer);
-      document.getElementById('signupDebug').textContent = 'LIFF ERROR: ' + err.message;
-      document.getElementById('retryConnectBtn').style.display = 'block';
+      showSignupMessage('⚠️', 'เชื่อมต่อ LINE ไม่สำเร็จ', 'LIFF ERROR: ' + err.message, true);
     });
   }
 
@@ -220,10 +226,12 @@
   function loadDynamicForm() {
     jsonp(API_URL + '?action=getConfig', function (config) {
       if (!config.success || config.isExpired) {
-        document.getElementById('signupLoadingBox').style.display = 'none';
-        document.getElementById('signupDebug').textContent = config.expiredMessage || 'ปิดรับสมัครแล้ว';
+        showSignupMessage('🔒', 'ไม่สามารถสมัครได้ในขณะนี้',
+          config.expiredMessage || config.message || 'ปิดรับสมัครแล้ว', false);
         return;
       }
+
+      if (config.successMessage) successMessage = config.successMessage;
 
       var container = document.getElementById('dynamicFields');
       container.innerHTML = '';
@@ -244,6 +252,10 @@
             input.type = 'date';
           } else if (field.type === 'อีเมล') {
             input.type = 'email';
+          } else if (field.type === 'ตัวเลข') {
+            input.type = 'text';
+            input.inputMode = 'numeric';
+            input.pattern = '[0-9]*';
           } else {
             input.type = 'text';
           }
@@ -258,7 +270,7 @@
       document.getElementById('signupLoadingBox').style.display = 'none';
       document.getElementById('memberForm').style.display = 'block';
     }, function () {
-      document.getElementById('signupDebug').textContent = 'ดึงข้อมูลฟอร์มไม่สำเร็จ กรุณาลองใหม่';
+      showSignupMessage('⚠️', 'เกิดข้อผิดพลาด', 'ดึงข้อมูลฟอร์มไม่สำเร็จ กรุณาลองใหม่', true);
     });
   }
 
@@ -277,7 +289,7 @@
 
     var formData = { userId: currentUserId };
     var inputs = document.querySelectorAll('#dynamicFields input');
-    
+
     inputs.forEach(function (input) {
       formData[input.name] = input.value;
     });
@@ -296,10 +308,12 @@
       .then(function (result) {
         if (!result.ok) throw new Error(result.error || 'บันทึกไม่สำเร็จ');
         submitBtn.textContent = 'เข้าร่วมสำเร็จ ✓';
-        statusEl.textContent = 'บันทึกข้อมูลเรียบร้อย กำลังปิดหน้าต่าง...';
+        statusEl.textContent = (result.status === 'already_registered')
+          ? 'คุณเป็นสมาชิกอยู่แล้ว'
+          : successMessage;
         setTimeout(function () {
           if (liff.isInClient()) { liff.closeWindow(); }
-        }, 1200);
+        }, 2500);
       })
       .catch(function (err) {
         submitBtn.disabled = false;
